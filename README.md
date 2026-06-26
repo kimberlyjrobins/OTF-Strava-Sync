@@ -23,6 +23,26 @@ Each uploaded workout shows up as an activity with:
 
 ---
 
+## Optional: forward activities to Strava too
+
+This script uploads to Garmin Connect using Garmin's standard upload endpoint,
+which means any activity it creates is treated like a normal synced activity —
+including being forwarded to other apps you've connected in Garmin Connect.
+
+If you'd like your Orangetheory workouts to also show up in Strava, you can use
+Garmin's own free, official Strava partner integration (this is separate from
+Strava's paid developer API and doesn't require any Strava API credentials):
+
+1. Open the **Garmin Connect** app (or [connect.garmin.com](https://connect.garmin.com))
+2. Go to **Settings → Connected Apps → Strava**
+3. Tap/click **Connect**, then log into your Strava account when prompted
+
+Once connected, any new activity uploaded to Garmin — including the ones this
+script creates — will automatically flow through to Strava as well, no further
+setup needed.
+
+---
+
 ## Setup (one-time, ~10 minutes)
 
 ### Step 1: Install Python on your computer

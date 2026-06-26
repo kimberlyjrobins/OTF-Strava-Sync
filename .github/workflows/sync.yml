@@ -1,0 +1,32 @@
+name: Sync OTF workouts to Garmin Connect
+
+on:
+  schedule:
+    # Runs twice a day (UTC). Adjust to a couple hours after your usual class times.
+    # 11:00 UTC = 7am ET / 4am PT  |  23:00 UTC = 7pm ET / 4pm PT
+    - cron: "0 11 * * *"
+    - cron: "0 23 * * *"
+  workflow_dispatch: {}  # lets you trigger manually from the Actions tab
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run sync
+        env:
+          OTF_EMAIL: ${{ secrets.OTF_EMAIL }}
+          OTF_PASSWORD: ${{ secrets.OTF_PASSWORD }}
+          GARMINTOKENS: ${{ secrets.GARMINTOKENS }}
+          LOOKBACK_HOURS: "48"
+        run: python sync_otf_to_garmin.py

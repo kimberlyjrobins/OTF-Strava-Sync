@@ -4,8 +4,11 @@ Sync Orangetheory workouts to Garmin Connect.
 
 Pulls recent OTF workouts (with second-by-second heart rate telemetry where
 available), converts each one into a TCX file, and uploads it to Garmin Connect
-using the import endpoint — so Garmin treats them as imported activities and
-does NOT re-export them to other services.
+using the standard upload endpoint -- which means Garmin treats it like a normal
+synced activity and WILL forward it to any Connected Apps you've linked (e.g.
+Strava), via Garmin's own official partner integration with Strava. Connect that
+in Garmin Connect under Settings -> Connected Apps -> Strava (free, no Strava
+developer API or subscription required).
 
 Designed to run on a schedule (e.g. GitHub Actions, daily) without any
 persistent state file -- it checks Garmin's activity list each run to avoid
@@ -270,13 +273,22 @@ def main():
             tcx_bytes, _, notes = build_tcx(workout)
             has_telemetry = bool(workout.telemetry and workout.telemetry.telemetry)
 
-            # garminconnect.import_activity() takes a file path, so write to a temp file
+            # garminconnect.upload_activity() takes a file path, so write to a temp file.
+            # NOTE: we deliberately use upload_activity() (the regular endpoint) rather
+            # than import_activity() here. import_activity() tells Garmin to treat the
+            # activity as a third-party "import" that does NOT get forwarded to connected
+            # apps. upload_activity() is treated like a normal synced activity, which
+            # Garmin DOES forward to Strava (or any other Connected App) once you've
+            # linked them in Garmin Connect settings.
             with tempfile.NamedTemporaryFile(suffix=".tcx", delete=False) as tmp:
                 tmp.write(tcx_bytes)
                 tmp_path = tmp.name
 
             try:
-                result = garmin.import_activity(tmp_path)
+                raw_result = garmin.upload_activity(tmp_path)
+                result = raw_result.json() if hasattr(raw_result, "json") else raw_result
+                if not isinstance(result, dict):
+                    result = {}
                 successes = result.get("detailedImportResult", {}).get("successes", [])
                 failures = result.get("detailedImportResult", {}).get("failures", [])
 
@@ -298,7 +310,8 @@ def main():
                     log(f"Uploaded '{workout_display_name(workout)}' ({start_utc})")
 
             except GarminConnectConnectionError as e:
-                if "duplicate" in str(e).lower() or "already exists" in str(e).lower():
+                err_str = str(e).lower()
+                if "duplicate" in err_str or "already exists" in err_str or "409" in err_str:
                     log(f"Garmin reports duplicate for '{otf_class.name}', skipping.")
                     skipped += 1
                     continue

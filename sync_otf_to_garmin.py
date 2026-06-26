@@ -36,6 +36,8 @@ from otf_api import Otf, OtfUser
 from garminconnect import Garmin, GarminConnectConnectionError
 
 LOOKBACK_HOURS = int(os.environ.get("LOOKBACK_HOURS", "48"))
+OTF_LOGIN_MAX_RETRIES = 4
+OTF_LOGIN_RETRY_BACKOFF_SECONDS = 30  # doubles each retry: 30s, 60s, 120s, 240s
 
 
 def log(msg):
@@ -188,6 +190,37 @@ def workout_display_name(workout):
 # Main
 # ---------------------------------------------------------------------------
 
+def otf_login_with_retry():
+    """Log into OTF, retrying with backoff on transient backend auth errors.
+
+    OTF's login backend occasionally throws a Cognito-level error like
+    'pool is draining and cannot accept work' -- this is a server-side
+    issue (e.g. a deployment or scaling event on OTF's end), not something
+    wrong with our credentials or code. Retrying after a short wait usually
+    resolves it.
+    """
+    last_error = None
+    for attempt in range(1, OTF_LOGIN_MAX_RETRIES + 1):
+        try:
+            return Otf(user=OtfUser(os.environ["OTF_EMAIL"], os.environ["OTF_PASSWORD"]))
+        except Exception as e:
+            last_error = e
+            if attempt == OTF_LOGIN_MAX_RETRIES:
+                break
+            wait = OTF_LOGIN_RETRY_BACKOFF_SECONDS * (2 ** (attempt - 1))
+            log(f"OTF login attempt {attempt}/{OTF_LOGIN_MAX_RETRIES} failed "
+                f"({type(e).__name__}: {e}). This is usually transient on "
+                f"OTF's end. Retrying in {wait}s...")
+            time.sleep(wait)
+
+    log(f"ERROR: OTF login failed after {OTF_LOGIN_MAX_RETRIES} attempts. "
+        f"Last error: {type(last_error).__name__}: {last_error}")
+    log("This looks like an issue on Orangetheory's authentication backend "
+        "rather than with this script or your credentials. It will likely "
+        "clear up on its own -- try re-running the workflow in a bit.")
+    sys.exit(1)
+
+
 def main():
     log("Starting OTF -> Garmin Connect sync")
 
@@ -202,7 +235,7 @@ def main():
         sys.exit(1)
 
     # --- Connect to OTF ---
-    otf = Otf(user=OtfUser(os.environ["OTF_EMAIL"], os.environ["OTF_PASSWORD"]))
+    otf = otf_login_with_retry()
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
     since_date_str = cutoff.strftime("%Y-%m-%d")

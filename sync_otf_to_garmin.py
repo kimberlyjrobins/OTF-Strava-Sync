@@ -110,14 +110,14 @@ def already_uploaded(workout_start_utc, existing_starts, tolerance_minutes=10):
 def build_tcx(workout):
     """Build a TCX document from an otf_api Workout object."""
     otf_class = workout.otf_class
-    start_local = otf_class.starts_at_local
+    start_utc = otf_class.starts_at_utc
     duration_seconds = workout.active_time_seconds or 3600
     calories = workout.calories_burned or 0
 
-    if start_local.tzinfo:
-        start_utc = start_local.astimezone(timezone.utc)
+    if start_utc.tzinfo:
+        start_utc = start_utc.astimezone(timezone.utc)
     else:
-        start_utc = start_local.replace(tzinfo=timezone.utc)
+        start_utc = start_utc.replace(tzinfo=timezone.utc)
     start_str = start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     points_xml = []
@@ -222,12 +222,11 @@ def main():
 
     for workout in workouts:
         otf_class = workout.otf_class
-        start_local = otf_class.starts_at_local
-        start_utc = (
-            start_local.astimezone(timezone.utc)
-            if start_local.tzinfo
-            else start_local.replace(tzinfo=timezone.utc)
-        )
+        start_utc = otf_class.starts_at_utc
+        if start_utc.tzinfo:
+            start_utc = start_utc.astimezone(timezone.utc)
+        else:
+            start_utc = start_utc.replace(tzinfo=timezone.utc)
 
         if already_uploaded(start_utc, existing_starts):
             log(f"Skipping '{otf_class.name}' at {start_utc} -- already in Garmin")

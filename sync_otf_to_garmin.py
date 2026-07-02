@@ -297,11 +297,15 @@ def main():
                     telemetry_note = "[with HR telemetry]" if has_telemetry else "[summary only, no HR graph]"
                     log(f"Uploaded '{workout_display_name(workout)}' ({start_utc}) "
                         f"-- Garmin activity id {internal_id} {telemetry_note}")
-                    # Rename the activity to something friendly
+                    # Wait a few seconds for Garmin to finish processing the activity
+                    # before renaming it, otherwise the PUT can race with Garmin's
+                    # own post-upload processing (and the Strava forwarding).
+                    time.sleep(5)
                     try:
                         garmin.set_activity_name(internal_id, workout_display_name(workout))
-                    except Exception:
-                        pass  # naming is nice-to-have
+                        log(f"  Renamed activity {internal_id} to '{workout_display_name(workout)}'")
+                    except Exception as name_err:
+                        log(f"  Warning: could not rename activity {internal_id}: {name_err}")
                 elif failures:
                     log(f"Garmin reported upload failure for '{otf_class.name}': {failures}")
                     failed += 1
